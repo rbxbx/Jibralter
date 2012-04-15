@@ -3,12 +3,10 @@ _ = require("underscore")
 class Env
   constructor: (params, args, outer = null) ->
     @variables = {}
+    @outer = outer
 
     if params and args
       @update(_.zip(params, args))
-
-    @outer = outer
-
 
   find: (variable) ->
     if _.has(@variables, variable) then this else outer.find(variable)
@@ -31,7 +29,12 @@ addGlobals = (env) ->
     '<=': (x, y) -> x <= y
   env.update _.extend(operators, { 'True': true, 'False': false })
 
-globalEnv = addGlobals new Env
+createGlobalEnv = ->
+  env = new Env
+  addGlobals(env)
+  env
+
+globalEnv = createGlobalEnv()
 
 evaluate = (x, env = globalEnv) ->
   [head, tail] = x
@@ -82,30 +85,31 @@ evaluate = (x, env = globalEnv) ->
           val = evaluate(exp, env)
         val
       else
-        exps = evaluate(exp, env) for exp in x
-        _.first(exps).call(this, exps...)
+        [exp, args...] = evaluate(exp, env) for exp in x
+        exp(args)
+
 
 parse = (string) -> readFrom(tokenize(string))
 
 tokenize = (string) ->
-  string.replace("(", " ( ").replace(")", " ) ").split(" ")
+  _.compact string.replace(/\(/gm, " ( ").replace(/\)/gm, " ) ").split(" ")
 
 readFrom = (tokens) ->
-  throw "unexpected EOF while reading" if _.isEmpty(tokens)
-  token = tokens.pop()
+  throw "Syntax Error: unexpected EOF while reading" if _.isEmpty(tokens)
+  [token, tokens...] = tokens
   if '(' == token
-    L = []
+    list = []
     while _.first(tokens) != ')'
-      L.push(readFrom(tokens))
-      tokens.pop()
-      L
+      list.push(readFrom(tokens))
+      tokens = _.rest(tokens)
+    list
   else if ')' == token
     throw "Syntax Error: unexpected ')'"
   else atom(token)
 
 atom = (token) ->
-  if _.isNumber(+token)
-    +token 
+  if _.isFinite(+token)
+    +token
   else
     token.toString()
 
@@ -125,7 +129,7 @@ runningParenSums = (program) ->
     total += parenCount
     rps.push(total) && rps
 
-repl = (prompt = 'jibralter>') ->
+repl = (prompt = 'jibralter > ') ->
   readline = require("readline")
   rl = readline.createInterface(process.stdin, process.stdout)
   try
@@ -135,7 +139,7 @@ repl = (prompt = 'jibralter>') ->
       rl.prompt()
 
     rl.on 'close', ->
-      console.log("\n Exiting #{ prompt }")
+      console.log("\n Exiting")
       process.exit(0)
 
     rl.setPrompt(prompt, prompt.length)
