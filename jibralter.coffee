@@ -1,5 +1,7 @@
 _ = require("underscore")
 
+jibralter = {}
+
 class Env
   constructor: (params, args, outer = null) ->
     @variables = {}
@@ -16,7 +18,7 @@ class Env
   set: (variable, value) ->
     @variables[variable] = value
 
-addGlobals = (env) ->
+jibralter.addGlobals = (env) ->
   operators =
     '+': (x, y) -> x + y
     '-': (x, y) -> x - y
@@ -29,14 +31,12 @@ addGlobals = (env) ->
     '<=': (x, y) -> x <= y
   env.update _.extend(operators, { 'True': true, 'False': false })
 
-createGlobalEnv = ->
+jibralter.globalEnv = do ->
   env = new Env
-  addGlobals(env)
+  jibralter.addGlobals(env)
   env
 
-globalEnv = createGlobalEnv()
-
-evaluate = (x, env = globalEnv) ->
+jibralter.evaluate = (x, env = jibralter.globalEnv) =>
   [head, tail] = x
 
   if _.isString(head)
@@ -48,93 +48,84 @@ evaluate = (x, env = globalEnv) ->
       when 'quote', 'q'
         tail
       when 'atom?'
-        not _.isArray(evaluate(tail, env))
+        not _.isArray(jibralter.evaluate(tail, env))
       when 'eq?'
         [exp1, exp2] = tail
-        val1 = evaluate(exp1, env)
-        val2 = evaluate(exp2, env)
+        val1 = jibralter.evaluate(exp1, env)
+        val2 = jibralter.evaluate(exp2, env)
         (not _.isArray(val1)) and (val1 == val2)
       when 'car'
-        _.first evaluate(tail, env)
+        _.first jibralter.evaluate(tail, env)
       when 'cdr'
-        _.rest evaluate(tail, env)
+        _.rest jibralter.evaluate(tail, env)
       when 'cons'
-        _.map(tail, evaluate)
+        _.map(tail, jibralter.evaluate)
       when 'cond'
         _.each tail, (predicate, exp) ->
-          if evaluate(predicate, env) then evaluate(exp, env)
+          if jibralter.evaluate(predicate, env) then jibralter.evaluate(exp, env)
       when 'null?'
-        _.isEmpty(evaluate(tail, env))
+        _.isEmpty(jibralter.evaluate(tail, env))
       when 'if'
         [test, conseq, alt] = tail
-        if evaluate(test, env)
-          evaluate(conseq, env)
+        if jibralter.evaluate(test, env)
+          jibralter.evaluate(conseq, env)
         else
-          evaluate(alt, env)
+          jibralter.evaluate(alt, env)
       when 'set!'
         [variable, exp] = tail
-        env.find(variable).set variable, eval(exp, env)
+        env.find(variable).set variable, jibralter.evaluate(exp, env)
       when 'define'
         [variable, exp] = tail
-        env.set variable, evaluate(exp)
+        env.set variable, jibralter.evaluate(exp)
       when 'lambda'
         [variables, exp] = tail
-        (args) -> evaluate(exp, (new Env(variables, args, env)))
+        (args) -> jibralter.evaluate(exp, (new Env(variables, args, env)))
       when 'begin'
         for exp in tail
-          val = evaluate(exp, env)
+          val = jibralter.evaluate(exp, env)
         val
       else
-        [exp, args...] = evaluate(exp, env) for exp in x
+        [exp, args...] = jibralter.evaluate(exp, env) for exp in x
         exp(args)
 
+jibralter.parse = (string) => jibralter.readFrom(jibralter.tokenize(string))
 
-parse = (string) -> readFrom(tokenize(string))
-
-tokenize = (string) ->
+jibralter.tokenize = (string) ->
   _.compact string.replace(/\(/gm, " ( ").replace(/\)/gm, " ) ").split(" ")
 
-readFrom = (tokens) ->
+jibralter.readFrom = (tokens) =>
   throw "Syntax Error: unexpected EOF while reading" if _.isEmpty(tokens)
   [token, tokens...] = tokens
   if '(' == token
     list = []
     while _.first(tokens) != ')'
-      list.push(readFrom(tokens))
+      console.log(list)
+      list.push(jibralter.readFrom(tokens))
       tokens = _.rest(tokens)
-    list
+    return list
   else if ')' == token
     throw "Syntax Error: unexpected ')'"
-  else atom(token)
+  else jibralter.atom(token)
 
-atom = (token) ->
+jibralter.atom = (token) =>
   if _.isFinite(+token)
     +token
   else
-    token.toString()
+    jibralter.toString(token)
 
-toString = (exp) ->
+jibralter.toString = (exp) =>
   unless _.isArray(exp)
     exp.toString()
   else
-    '(' + _.join(_.map(exp, toString), ' ') + ')'
+    "(#{ _.join(_.map(exp, jibralter.toString), ' ') })"
 
-runningParenSums = (program) ->
-  countOpenParens = (line) ->
-    line.match(/\(/g).length - line.match(/\)/).length
-  parenCounts = _.map(program, countOpenParens)
-  rps = []
-  total = 0
-  for parenCount in parensCount
-    total += parenCount
-    rps.push(total) && rps
-
-repl = (prompt = 'jibralter > ') ->
+jibralter.repl = (prompt = 'jibralter > ') =>
   readline = require("readline")
   rl = readline.createInterface(process.stdin, process.stdout)
   try
     rl.on 'line', (line) ->
-      val = evaluate(parse(line))
+      val = jibralter.evaluate(jibralter.parse(line))
+      console.log(jibralter.parse(line))
       console.log(val) unless _.isEmpty(val)
       rl.prompt()
 
@@ -147,4 +138,4 @@ repl = (prompt = 'jibralter > ') ->
   catch err
     console.log "An error occurred: #{err}"
 
-repl()
+exports.jibralter = jibralter
