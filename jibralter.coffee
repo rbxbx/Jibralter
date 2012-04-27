@@ -7,16 +7,24 @@ class Env
     @variables = {}
     @outer = outer
 
-    if params and args
-      @update(_.zip(params, args))
+    unless _.isEmpty(params) or _.isEmpty(args)
+
+      vars = {}
+      for [x, y] in _.zip(params, args)
+        vars[x] = y
+
+      @update(vars)
 
   find: (variable) ->
-    if _.has(@variables, variable) then this else outer.find(variable)
+    if _.has(@variables, variable) then this else @outer.find(variable)
 
-  update: (params) -> _.extend(@variables, params)
+  update: (params) ->
+    _.extend(@variables, params)
 
   set: (variable, value) ->
     @variables[variable] = value
+
+  get: (variable) -> @variables[variable]
 
 jibralter.addGlobals = (env) ->
   operators =
@@ -39,10 +47,10 @@ jibralter.globalEnv = do ->
 jibralter.evaluate = (x, env = jibralter.globalEnv) =>
   [head, tail] = x
 
-  if _.isString(head)
-    env.find(head)[head]
-  else if not _.isArray(head)
-    head
+  if _.isString(x)
+    env.find(x).get(x)
+  else if not _.isArray(x)
+    x
   else
     switch head
       when 'quote', 'q'
@@ -100,7 +108,7 @@ jibralter.readFrom = (tokens) =>
     list = []
     while _.first(tokens) != ')'
       list.push(jibralter.readFrom(tokens))
-    tokens = _.rest(tokens)
+    tokens.shift()
     return list
   else if ')' == token
     throw "Syntax Error: unexpected ')'"
@@ -137,4 +145,7 @@ jibralter.repl = (prompt = 'jibralter > ') =>
   catch err
     console.log "An error occurred: #{err}"
 
-module.exports = jibralter
+module.exports = {
+  env: Env
+  jibralter: jibralter
+}
