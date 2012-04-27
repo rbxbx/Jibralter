@@ -95,13 +95,12 @@ jibralter.tokenize = (string) ->
 
 jibralter.readFrom = (tokens) =>
   throw "Syntax Error: unexpected EOF while reading" if _.isEmpty(tokens)
-  [token, tokens...] = tokens
+  token = tokens.shift()
   if '(' == token
     list = []
     while _.first(tokens) != ')'
-      console.log(list)
       list.push(jibralter.readFrom(tokens))
-      tokens = _.rest(tokens)
+    tokens = _.rest(tokens)
     return list
   else if ')' == token
     throw "Syntax Error: unexpected ')'"
@@ -138,4 +137,4 @@ jibralter.repl = (prompt = 'jibralter > ') =>
   catch err
     console.log "An error occurred: #{err}"
 
-exports.jibralter = jibralter
+module.exports = jibralter
